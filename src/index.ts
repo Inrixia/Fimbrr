@@ -37,7 +37,7 @@ const endpoints = {
 const dwn = new Downloader(128);
 
 // Max number of jobs queued up
-const rL = new SemaLimit(4069);
+const rL = new SemaLimit(10240);
 
 const transformResponse = (response: CommentsResponse) => {
 	if (response.error !== undefined) return response;
@@ -51,8 +51,14 @@ const transformResponse = (response: CommentsResponse) => {
 	};
 };
 
+const doneLog: [name: string, done: number, max: number, queue: number][] = [];
+
 const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
+	const doneIdx = doneLog.length;
+	doneLog[doneIdx] ??= [endpoint.db.name, 0, endpoint.max, 0];
+	const log = () => doneLog.reduce((str, log) => `\r${str}[${log[0]}]: ${log[1]}/${log[2]} (${log[3]}), `, "") + `Inflight: ${dwn.inflight}`;
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
+		doneLog[doneIdx][3]++;
 		if (id < maxId && page === 1) {
 			rL.aquire().then(() => parsePage(id + 1, maxId, 1).then(() => rL.release()));
 		}
@@ -65,7 +71,11 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 		// Already grabbed
 		if (item !== null) {
 			if (item.num_pages && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
-			// console.log(`[${endpoint.db.name}][HAS]: ${id} - ${page}`);
+			else {
+				doneLog[doneIdx][1]++;
+				process.stdout.write(log());
+			}
+			doneLog[doneIdx][3]--;
 			return;
 		}
 
@@ -74,20 +84,23 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 			await endpoint.db.create({ ...result, id, page });
 
 			let pages = result.error === undefined ? result.num_pages ?? page : page;
-			console.log(`[${endpoint.db.name}][GET]: ${id} - ${page}/${pages}`);
+			process.stdout.write(log());
 
 			if (page < pages) parsePage(id, maxId, page + 1);
+			else doneLog[doneIdx][1]++;
 		} catch (error: any) {
 			await endpoint.db.create({ id, page, error: error?.toString() });
+			doneLog[doneIdx][1]++;
 		}
+		doneLog[doneIdx][3]--;
 	};
 	return parsePage;
 };
 
 (async () => {
 	await db.sync();
-	await db.query("VACUUM");
-	console.log("Database has been optimized and compacted.");
+	// await db.query("VACUUM");
+	// console.log("Database has been optimized and compacted.");
 
 	Object.values(endpoints).map((endpoint) => PageParser(endpoint)(1, endpoint.max));
 })();

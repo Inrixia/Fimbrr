@@ -26,6 +26,7 @@ export class SemaLimit {
 
 export class Downloader {
 	private semaLimit: SemaLimit;
+	public inflight: number = 0;
 
 	constructor(downloadThreads: number) {
 		this.semaLimit = new SemaLimit(downloadThreads);
@@ -33,6 +34,8 @@ export class Downloader {
 
 	public async download<T>(url: URL): Promise<T> {
 		await this.semaLimit.aquire();
+
+		this.inflight++;
 
 		const result = await got<T>(url, {
 			responseType: "json",
@@ -49,6 +52,8 @@ export class Downloader {
 				},
 			},
 		});
+
+		this.inflight--;
 
 		this.semaLimit.release();
 
