@@ -51,14 +51,32 @@ const transformResponse = (response: CommentsResponse) => {
 	};
 };
 
-const doneLog: {
-	name: string;
+type Stats = {
+	str?: string;
+	name?: string;
 	donePage: number;
 	totalPage: number;
 	doneId: number;
 	totalId: number;
 	queue: number;
-}[] = [];
+};
+const doneLog: Stats[] = [];
+
+const statLine = ({ name, doneId, totalId, donePage, totalPage, queue }: Stats) => `[${name}]: Ids: ${doneId}/${totalId} Pages: ${donePage}/${totalPage} (${queue})`;
+const log = () => {
+	const summed = doneLog.reduce(
+		(sum, stats) => ({
+			str: `\x1b[u${sum.str}${statLine(stats)}\n`,
+			doneId: sum.doneId + stats.doneId,
+			totalId: sum.totalId + stats.totalId,
+			donePage: sum.donePage + stats.donePage,
+			totalPage: sum.totalPage + stats.totalPage,
+			queue: sum.queue + stats.queue,
+		}),
+		{ str: "", doneId: 0, totalId: 0, donePage: 0, totalPage: 0, queue: 0 }
+	);
+	return `${summed.str}\n${statLine({ ...summed, name: "Total" })}\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.avgResponseTime.toFixed(2)}ms`;
+};
 
 const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	const doneIdx = doneLog.length;
@@ -70,9 +88,6 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 		totalId: endpoint.max,
 		queue: 0,
 	};
-	const log = () =>
-		doneLog.reduce((str, { name, donePage, totalPage, doneId, totalId, queue }) => `\x1b[u${str}[${name}]: Ids: ${doneId}/${totalId} Pages: ${donePage}/${totalPage} (${queue})\n`, "") +
-		`\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.avgResponseTime.toFixed(2)}ms`;
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
 		doneLog[doneIdx].queue++;
 		if (page !== 1) doneLog[doneIdx].totalPage++;
