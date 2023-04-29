@@ -16,98 +16,74 @@ export class Stats {
 
 	constructor(name: string, max: number, noPush = false) {
 		this.name = name;
+
 		this.totalIds = max;
 		this.totalPages = max;
-		if (!noPush) Stats.Stats.push(this);
+		if (Stats.Totals !== undefined) {
+			Stats.Totals.totalIds += max;
+			Stats.Totals.totalPages += max;
+			Stats.Stats.push(this);
+		}
 	}
+
+	private static ETA = () => {
+		if (Stats.Totals.remainingPages > 0) {
+			const secondsLeft = Stats.Totals.remainingPages / Stats.Totals.remainingPagesAvg;
+			const hours = Math.floor(secondsLeft / 3600);
+			const minutes = Math.floor((secondsLeft - hours * 3600) / 60);
+			return `${hours}hrs ${minutes}min`;
+		} else {
+			return "N/A";
+		}
+	};
 
 	public static log(suffix: string) {
 		return process.stdout.write(
-			`${Stats.Stats.reduce((str, stats) => `\x1b[u${str}${Stats.infoLine(stats)}\n`, "")}\n${Stats.infoLine(Stats.Totals)}\nRemaining: ${Stats.Totals.totalPages - Stats.Totals.donePages}${suffix}`
+			`${Stats.Stats.reduce((str, stats) => `\x1b[u${str}${Stats.infoLine(stats)}\n`, "")}\n${Stats.infoLine(Stats.Totals)}\nRemaining: ${Stats.Totals.remainingPages} (${
+				Stats.Totals.remainingPagesAvg * -1
+			}/s) ETA: ${Stats.ETA()}         ${suffix}`
 		);
 	}
 
 	private static infoLine = (stats: Stats) =>
-		`[${stats.name}]: Ids: ${stats.doneIds}/${stats.totalIds} (${stats.doneIdsAvg}/s), Pages: ${stats.donePages}/${stats.totalPages}  (${stats.donePagesAvg}/s)/(${stats.totalPagesAvg}/s), Queue: ${stats.queue} (${stats.queueAvg}/s)                             `;
+		`[${stats.name}]: Ids: ${stats.doneIds}/${stats.totalIds} (${stats.doneIdsAvg}/s), Pages: ${stats.donePages}/${stats.totalPages} (${stats.remainingPagesAvg}/s), Queue: ${stats.queue}                             `;
 
-	private updateValue(key: keyof Info, value: number) {
-		const change = value - this[`_${key}`];
-
-		this[`_${key}`] = value;
-		this[`_${key}Change`].value = change;
-		if (Stats.Totals !== undefined) {
-			Stats.Totals[`_${key}Change`].value = change;
-			Stats.Totals[`_${key}`] += change;
-		}
-	}
-
-	public static donePages = 0;
-	private _donePages = 0;
-	private _donePagesChange = new Change();
-
-	public get donePages() {
-		return this._donePages;
-	}
-	public set donePages(value: number) {
-		this.updateValue("donePages", value);
-	}
-	public get donePagesAvg() {
-		return this._donePagesChange.avg;
-	}
-
-	public static doneIds = 0;
-	private _doneIds = 0;
-	private _doneIdsChange = new Change();
-
-	public get doneIds() {
-		return this._doneIds;
-	}
-	public set doneIds(value: number) {
-		this.updateValue("doneIds", value);
-	}
+	public doneIds = 0;
+	private doneIdsChange = new Change();
 	public get doneIdsAvg() {
-		return this._doneIdsChange.avg;
+		return this.doneIdsChange.avg;
 	}
 
-	public static totalIds = 0;
-	private _totalIds = 0;
-	private _totalIdsChange = new Change();
+	public totalIds = 0;
+	public donePages = 0;
+	public totalPages = 0;
 
-	public get totalIds() {
-		return this._totalIds;
+	public get remainingPages() {
+		return this.totalPages - this.donePages;
 	}
-	public set totalIds(value: number) {
-		this.updateValue("totalIds", value);
-	}
-	public get totalIdsAvg() {
-		return this._totalIdsChange.avg;
+	private remainingPagesChange = new Change();
+	public get remainingPagesAvg() {
+		return this.remainingPagesChange.avg;
 	}
 
-	public static totalPages = 0;
-	private _totalPages = 0;
-	private _totalPagesChange = new Change();
+	public queue = 0;
 
-	public get totalPages() {
-		return this._totalPages;
-	}
-	public set totalPages(value: number) {
-		this.updateValue("totalPages", value);
-	}
-	public get totalPagesAvg() {
-		return this._totalPagesChange.avg;
-	}
+	public set(key: keyof Info, change: number) {
+		this[key] += change;
+		Stats.Totals[key] += change;
 
-	public static queue = 0;
-	private _queue = 0;
-	private _queueChange = new Change();
-
-	public get queue() {
-		return this._queue;
-	}
-	public set queue(value: number) {
-		this.updateValue("queue", value);
-	}
-	public get queueAvg() {
-		return this._queueChange.avg;
+		switch (key) {
+			case "totalPages":
+				change *= -1;
+			case "donePages":
+				this.remainingPagesChange.change = change;
+				if (Stats.Totals !== undefined) Stats.Totals.remainingPagesChange.change = change;
+				break;
+			case "doneIds":
+				this.doneIdsChange.change = change;
+				if (Stats.Totals !== undefined) {
+					Stats.Totals.doneIdsChange.change = change;
+				}
+		}
 	}
 }

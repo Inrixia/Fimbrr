@@ -57,8 +57,8 @@ const getSuffix = () => `\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.av
 const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	const stats = new Stats(endpoint.db.name, endpoint.max);
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
-		stats.queue++;
-		if (page !== 1) stats.totalPages++;
+		stats.set("queue", 1);
+		if (page !== 1) stats.set("totalPages", 1);
 		else if (id < maxId) {
 			rL.aquire().then(() => parsePage(id + 1, maxId, 1).then(() => rL.release()));
 		}
@@ -72,11 +72,11 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 		if (item !== null) {
 			if (item.num_pages && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
 			else {
-				stats.doneIds++;
+				stats.set("doneIds", 1);
 				Stats.log(getSuffix());
 			}
-			stats.donePages++;
-			stats.queue--;
+			stats.set("donePages", 1);
+			stats.set("queue", -1);
 			return;
 		}
 
@@ -88,13 +88,13 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 			Stats.log(getSuffix());
 
 			if (page < pages) parsePage(id, maxId, page + 1);
-			else stats.doneIds++;
+			else stats.set("doneIds", 1);
 		} catch (error: any) {
 			await endpoint.db.create({ id, page, error: error?.toString() });
-			if (page === 1) stats.doneIds++;
+			if (page === 1) stats.set("doneIds", 1);
 		}
-		stats.donePages++;
-		stats.queue--;
+		stats.set("donePages", 1);
+		stats.set("queue", -1);
 	};
 	return parsePage;
 };

@@ -17,7 +17,7 @@ export class Change {
 		return this.values.reduce((sum, val) => sum + val, 0);
 	}
 
-	public set value(value: number) {
+	public set change(value: number) {
 		const now = Date.now();
 		this.values.push(value);
 		this.timestamps.push(now);
