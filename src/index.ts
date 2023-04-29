@@ -1,5 +1,5 @@
 import { Downloader, SemaLimit } from "./Downloader.js";
-import { Story, Blog, User, db } from "./Models.js";
+import { Story, Blog, User, db, Group } from "./Models.js";
 import { Stats } from "./Stats.js";
 
 type CommentsResponse =
@@ -31,6 +31,11 @@ const endpoints = {
 		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/blog_posts_comments?item_id=${id}&page=${page}&order=DESC`),
 		db: Blog,
 		max: 585000,
+	},
+	group: {
+		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/comments_group?item_id=${id}&page=${page}&order=DESC`),
+		db: Group,
+		max: 216971,
 	},
 } as const;
 
