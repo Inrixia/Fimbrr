@@ -51,15 +51,16 @@ const transformResponse = (response: CommentsResponse) => {
 	};
 };
 
-const doneLog: [name: string, done: number, max: number, queue: number][] = [];
+const doneLog: [name: string, done: number, max: number, queue: number, extra: number][] = [];
 
 const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	const doneIdx = doneLog.length;
-	doneLog[doneIdx] ??= [endpoint.db.name, 0, endpoint.max, 0];
-	const log = () => doneLog.reduce((str, log) => `\r${str}[${log[0]}]: ${log[1]}/${log[2]} (${log[3]}), `, "") + `Inflight: ${dwn.inflight}`;
+	doneLog[doneIdx] ??= [endpoint.db.name, 0, endpoint.max, 0, 0];
+	const log = () => doneLog.reduce((str, [name, done, max, queue, extra]) => `\r${str}[${name}]: ${done}/${max}+${extra} (${queue}), `, "") + `Inflight: ${dwn.inflight}`;
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
 		doneLog[doneIdx][3]++;
-		if (id < maxId && page === 1) {
+		if (page !== 1) doneLog[doneIdx][4]++;
+		else if (id < maxId) {
 			rL.aquire().then(() => parsePage(id + 1, maxId, 1).then(() => rL.release()));
 		}
 		const item = await endpoint.db.findOne({
