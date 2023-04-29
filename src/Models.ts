@@ -79,7 +79,7 @@ Story.init(
 				return this.content ? decompress(this.content).toString() : this.content;
 			},
 			set(content: string | undefined | null) {
-				if (!content) return;
+				if (content === undefined || content === null || content === "") return;
 
 				this.setDataValue("content", compress(Buffer.from(content)));
 			},
@@ -100,7 +100,9 @@ Blog.init(
 			get() {
 				return this.content ? decompress(this.content).toString() : this.content;
 			},
-			set(content: string) {
+			set(content: string | undefined | null) {
+				if (content === undefined || content === null || content === "") return;
+
 				this.setDataValue("content", compress(Buffer.from(content)));
 			},
 		},
@@ -120,7 +122,9 @@ User.init(
 			get() {
 				return this.content ? decompress(this.content).toString() : this.content;
 			},
-			set(content: Buffer) {
+			set(content: string | undefined | null) {
+				if (content === undefined || content === null || content === "") return;
+
 				this.setDataValue("content", compress(Buffer.from(content)));
 			},
 		},
