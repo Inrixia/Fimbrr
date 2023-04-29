@@ -1,3 +1,4 @@
+import { compress, decompress } from "@cloudpss/zstd/napi";
 import { Model, DataTypes, Optional, Sequelize } from "sequelize";
 
 export const db = new Sequelize({
@@ -10,12 +11,13 @@ export const db = new Sequelize({
 export interface CommentsAttributes {
 	id: number;
 	page: number;
-	content?: string;
-	num_comments?: number;
-	start_index?: number;
-	end_index?: number;
-	num_pages?: number;
-	error?: string;
+	contentStr?: string | null;
+	content?: Buffer | null;
+	num_comments?: number | null;
+	start_index?: number | null;
+	end_index?: number | null;
+	num_pages?: number | null;
+	error?: string | null;
 }
 
 type CommentsCreationAttributes = Optional<CommentsAttributes, "id">;
@@ -23,25 +25,26 @@ type CommentsCreationAttributes = Optional<CommentsAttributes, "id">;
 class Comments extends Model<CommentsAttributes, CommentsCreationAttributes> {
 	declare id: number;
 	declare page: number;
-	declare content?: string;
-	declare num_comments?: number;
-	declare start_index?: number;
-	declare end_index?: number;
-	declare num_pages?: number;
-	declare error?: string;
+	declare contentStr?: string | null;
+	declare content?: Buffer | null;
+	declare num_comments?: number | null;
+	declare start_index?: number | null;
+	declare end_index?: number | null;
+	declare num_pages?: number | null;
+	declare error?: string | null;
 }
 
 const ComementsModel = {
 	id: {
-		type: DataTypes.NUMBER,
+		type: DataTypes.INTEGER,
 		primaryKey: true,
 	},
 	page: {
-		type: DataTypes.NUMBER,
+		type: DataTypes.INTEGER,
 		primaryKey: true,
 	},
 	content: {
-		type: DataTypes.STRING,
+		type: DataTypes.BLOB,
 		allowNull: true,
 	},
 	num_comments: {
@@ -67,19 +70,63 @@ const ComementsModel = {
 };
 
 export class Story extends Comments {}
-Story.init(ComementsModel, {
-	sequelize: db,
-	modelName: "Story",
-});
+Story.init(
+	{
+		...ComementsModel,
+		contentStr: {
+			type: DataTypes.VIRTUAL,
+			get() {
+				return this.content ? decompress(this.content).toString() : this.content;
+			},
+			set(content: string | undefined | null) {
+				if (!content) return;
+
+				this.setDataValue("content", compress(Buffer.from(content)));
+			},
+		},
+	},
+	{
+		sequelize: db,
+		modelName: "Story",
+	}
+);
 
 export class Blog extends Comments {}
-Blog.init(ComementsModel, {
-	sequelize: db,
-	modelName: "Blog",
-});
+Blog.init(
+	{
+		...ComementsModel,
+		contentStr: {
+			type: DataTypes.VIRTUAL,
+			get() {
+				return this.content ? decompress(this.content).toString() : this.content;
+			},
+			set(content: string) {
+				this.setDataValue("content", compress(Buffer.from(content)));
+			},
+		},
+	},
+	{
+		sequelize: db,
+		modelName: "Blog",
+	}
+);
 
 export class User extends Comments {}
-User.init(ComementsModel, {
-	sequelize: db,
-	modelName: "User",
-});
+User.init(
+	{
+		...ComementsModel,
+		contentStr: {
+			type: DataTypes.VIRTUAL,
+			get() {
+				return this.content ? decompress(this.content).toString() : this.content;
+			},
+			set(content: Buffer) {
+				this.setDataValue("content", compress(Buffer.from(content)));
+			},
+		},
+	},
+	{
+		sequelize: db,
+		modelName: "User",
+	}
+);

@@ -37,12 +37,12 @@ const endpoints = {
 const dwn = new Downloader(128);
 
 // Max number of jobs queued up
-const rL = new SemaLimit(1024);
+const rL = new SemaLimit(4069);
 
 const transformResponse = (response: CommentsResponse) => {
 	if (response.error !== undefined) return response;
 	return {
-		content: response.content ?? undefined,
+		contentStr: response.content ?? undefined,
 		num_comments: response.num_comments ? parseInt(response.num_comments) : undefined,
 		start_index: response.start_index ? parseInt(response.start_index) : undefined,
 		end_index: response.end_index ? parseInt(response.end_index) : undefined,
@@ -64,7 +64,7 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 		});
 		// Already grabbed
 		if (item !== null) {
-			if (item.num_pages !== undefined && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
+			if (item.num_pages && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
 			// console.log(`[${endpoint.db.name}][HAS]: ${id} - ${page}`);
 			return;
 		}
@@ -86,6 +86,8 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 
 (async () => {
 	await db.sync();
+	await db.query("VACUUM");
+	console.log("Database has been optimized and compacted.");
 
 	Object.values(endpoints).map((endpoint) => PageParser(endpoint)(1, endpoint.max));
 })();

@@ -4,6 +4,7 @@
     "start": "tsc && node --max-old-space-size=24384 ./dist/index.js"
   },
   "dependencies": {
+    "@cloudpss/zstd": "^0.2.7",
     "@types/node": "^18.16.1",
     "got": "^12.6.0",
     "sequelize": "^6.31.0",
