@@ -1,5 +1,6 @@
 import { Downloader, SemaLimit } from "./Downloader.js";
 import { Story, Blog, User, db } from "./Models.js";
+import { Stats } from "./Stats.js";
 
 type CommentsResponse =
 	| {
@@ -51,46 +52,13 @@ const transformResponse = (response: CommentsResponse) => {
 	};
 };
 
-type Stats = {
-	str?: string;
-	name?: string;
-	donePage: number;
-	totalPage: number;
-	doneId: number;
-	totalId: number;
-	queue: number;
-};
-const doneLog: Stats[] = [];
-
-const statLine = ({ name, doneId, totalId, donePage, totalPage, queue }: Stats) => `[${name}]: Ids: ${doneId}/${totalId} Pages: ${donePage}/${totalPage} (${queue})`;
-const log = () => {
-	const summed = doneLog.reduce(
-		(sum, stats) => ({
-			str: `\x1b[u${sum.str}${statLine(stats)}\n`,
-			doneId: sum.doneId + stats.doneId,
-			totalId: sum.totalId + stats.totalId,
-			donePage: sum.donePage + stats.donePage,
-			totalPage: sum.totalPage + stats.totalPage,
-			queue: sum.queue + stats.queue,
-		}),
-		{ str: "", doneId: 0, totalId: 0, donePage: 0, totalPage: 0, queue: 0 }
-	);
-	return `${summed.str}\n${statLine({ ...summed, name: "Total" })}\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.avgResponseTime.toFixed(2)}ms`;
-};
+const getSuffix = () => `\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.avgResponseTime.toFixed(2)}ms`;
 
 const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
-	const doneIdx = doneLog.length;
-	doneLog[doneIdx] ??= {
-		name: endpoint.db.name,
-		donePage: 0,
-		totalPage: endpoint.max,
-		doneId: 0,
-		totalId: endpoint.max,
-		queue: 0,
-	};
+	const stats = new Stats(endpoint.db.name, endpoint.max);
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
-		doneLog[doneIdx].queue++;
-		if (page !== 1) doneLog[doneIdx].totalPage++;
+		stats.queue++;
+		if (page !== 1) stats.totalPages++;
 		else if (id < maxId) {
 			rL.aquire().then(() => parsePage(id + 1, maxId, 1).then(() => rL.release()));
 		}
@@ -104,11 +72,11 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 		if (item !== null) {
 			if (item.num_pages && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
 			else {
-				doneLog[doneIdx].doneId++;
-				process.stdout.write(log());
+				stats.doneIds++;
+				Stats.log(getSuffix());
 			}
-			doneLog[doneIdx].donePage++;
-			doneLog[doneIdx].queue--;
+			stats.donePages++;
+			stats.queue--;
 			return;
 		}
 
@@ -117,16 +85,16 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 			await endpoint.db.create({ ...result, id, page });
 
 			let pages = result.error === undefined ? result.num_pages ?? page : page;
-			process.stdout.write(log());
+			Stats.log(getSuffix());
 
 			if (page < pages) parsePage(id, maxId, page + 1);
-			else doneLog[doneIdx].doneId++;
+			else stats.doneIds++;
 		} catch (error: any) {
 			await endpoint.db.create({ id, page, error: error?.toString() });
-			if (page === 1) doneLog[doneIdx].doneId++;
+			if (page === 1) stats.doneIds++;
 		}
-		doneLog[doneIdx].donePage++;
-		doneLog[doneIdx].queue--;
+		stats.donePages++;
+		stats.queue--;
 	};
 	return parsePage;
 };
