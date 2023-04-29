@@ -1,11 +1,14 @@
+import { performance } from "perf_hooks";
 import got from "got";
 
 export class SemaLimit {
 	private availableSlots: number;
 	private queue: (() => void)[] = [];
 
+	public readonly slots: number;
+
 	constructor(slots: number) {
-		this.availableSlots = slots;
+		this.slots = this.availableSlots = slots;
 	}
 
 	public async aquire() {
@@ -28,6 +31,8 @@ export class Downloader {
 	private semaLimit: SemaLimit;
 	public inflight: number = 0;
 
+	public avgResponseTime: number = 0;
+
 	constructor(downloadThreads: number) {
 		this.semaLimit = new SemaLimit(downloadThreads);
 	}
@@ -37,6 +42,7 @@ export class Downloader {
 
 		this.inflight++;
 
+		const startTime = performance.now();
 		const result = await got<T>(url, {
 			responseType: "json",
 			resolveBodyOnly: true,
@@ -52,11 +58,17 @@ export class Downloader {
 				},
 			},
 		});
+		const endTime = performance.now();
+		this.updateAvgResponseTime(endTime - startTime);
 
 		this.inflight--;
 
 		this.semaLimit.release();
 
 		return result;
+	}
+
+	private updateAvgResponseTime(responseTime: number): void {
+		this.avgResponseTime = (this.avgResponseTime * (this.semaLimit.slots - 1) + responseTime) / this.semaLimit.slots;
 	}
 }

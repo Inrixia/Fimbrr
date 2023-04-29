@@ -34,7 +34,7 @@ const endpoints = {
 } as const;
 
 // Max number of downloads allowed to run at once
-const dwn = new Downloader(128);
+const dwn = new Downloader(16);
 
 // Max number of jobs queued up
 const rL = new SemaLimit(10240);
@@ -72,7 +72,7 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	};
 	const log = () =>
 		doneLog.reduce((str, { name, donePage, totalPage, doneId, totalId, queue }) => `\x1b[u${str}[${name}]: Ids: ${doneId}/${totalId} Pages: ${donePage}/${totalPage} (${queue})\n`, "") +
-		`\nInflight: ${dwn.inflight}`;
+		`\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.avgResponseTime.toFixed(2)}ms`;
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
 		doneLog[doneIdx].queue++;
 		if (page !== 1) doneLog[doneIdx].totalPage++;
