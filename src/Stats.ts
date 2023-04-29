@@ -39,17 +39,19 @@ export class Stats {
 
 	public static log(suffix: string) {
 		return process.stdout.write(
-			`${Stats.Stats.reduce((str, stats) => `\x1b[u${str}${Stats.infoLine(stats)}\n`, "")}\n${Stats.infoLine(Stats.Totals)}\nRemaining: ${Stats.Totals.remainingPages} (${
+			`${Stats.Stats.reduce((str, stats) => `\x1b[u${str}${Stats.infoLine(stats)}\n`, "")}\n${Stats.infoLine(Stats.Totals)}\nRemaining: ${Stats.Totals.remainingPages} (${(
 				Stats.Totals.remainingPagesAvg * -1
-			}/s) ETA: ${Stats.ETA()}         ${suffix}`
+			).toFixed(0)}/s) ETA: ${Stats.ETA()}         ${suffix}`
 		);
 	}
 
 	private static infoLine = (stats: Stats) =>
-		`[${stats.name}]: Ids: ${stats.doneIds}/${stats.totalIds} (${stats.doneIdsAvg}/s), Pages: ${stats.donePages}/${stats.totalPages} (${stats.remainingPagesAvg}/s), Queue: ${stats.queue}                             `;
+		`[${stats.name}]: Ids: ${stats.doneIds}/${stats.totalIds} (${stats.doneIdsAvg.toFixed(0)}/s), Pages: ${stats.donePages}/${stats.totalPages} (${stats.remainingPagesAvg.toFixed(0)}/s), Queue: ${
+			stats.queue
+		}                             `;
 
 	public doneIds = 0;
-	private doneIdsChange = new Change();
+	private doneIdsChange = new Change(30);
 	public get doneIdsAvg() {
 		return this.doneIdsChange.avg;
 	}
@@ -61,7 +63,7 @@ export class Stats {
 	public get remainingPages() {
 		return this.totalPages - this.donePages;
 	}
-	private remainingPagesChange = new Change();
+	private remainingPagesChange = new Change(30);
 	public get remainingPagesAvg() {
 		return this.remainingPagesChange.avg;
 	}
