@@ -51,15 +51,31 @@ const transformResponse = (response: CommentsResponse) => {
 	};
 };
 
-const doneLog: [name: string, done: number, max: number, queue: number, extra: number][] = [];
+const doneLog: {
+	name: string;
+	donePage: number;
+	totalPage: number;
+	doneId: number;
+	totalId: number;
+	queue: number;
+}[] = [];
 
 const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	const doneIdx = doneLog.length;
-	doneLog[doneIdx] ??= [endpoint.db.name, 0, endpoint.max, 0, 0];
-	const log = () => doneLog.reduce((str, [name, done, max, queue, extra]) => `\r${str}[${name}]: ${done}/${max}+${extra} (${queue}), `, "") + `Inflight: ${dwn.inflight}`;
+	doneLog[doneIdx] ??= {
+		name: endpoint.db.name,
+		donePage: 0,
+		totalPage: endpoint.max,
+		doneId: 0,
+		totalId: endpoint.max,
+		queue: 0,
+	};
+	const log = () =>
+		doneLog.reduce((str, { name, donePage, totalPage, doneId, totalId, queue }) => `\x1b[u${str}[${name}]: Ids: ${doneId}/${totalId} Pages: ${donePage}/${totalPage} (${queue})\n`, "") +
+		`\nInflight: ${dwn.inflight}`;
 	const parsePage = async (id: number, maxId: number, page: number = 1) => {
-		doneLog[doneIdx][3]++;
-		if (page !== 1) doneLog[doneIdx][4]++;
+		doneLog[doneIdx].queue++;
+		if (page !== 1) doneLog[doneIdx].totalPage++;
 		else if (id < maxId) {
 			rL.aquire().then(() => parsePage(id + 1, maxId, 1).then(() => rL.release()));
 		}
@@ -73,10 +89,11 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 		if (item !== null) {
 			if (item.num_pages && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
 			else {
-				doneLog[doneIdx][1]++;
+				doneLog[doneIdx].doneId++;
 				process.stdout.write(log());
 			}
-			doneLog[doneIdx][3]--;
+			doneLog[doneIdx].donePage++;
+			doneLog[doneIdx].queue--;
 			return;
 		}
 
@@ -88,12 +105,13 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 			process.stdout.write(log());
 
 			if (page < pages) parsePage(id, maxId, page + 1);
-			else doneLog[doneIdx][1]++;
+			else doneLog[doneIdx].doneId++;
 		} catch (error: any) {
 			await endpoint.db.create({ id, page, error: error?.toString() });
-			doneLog[doneIdx][1]++;
+			if (page === 1) doneLog[doneIdx].doneId++;
 		}
-		doneLog[doneIdx][3]--;
+		doneLog[doneIdx].donePage++;
+		doneLog[doneIdx].queue--;
 	};
 	return parsePage;
 };
@@ -102,6 +120,7 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	await db.sync();
 	// await db.query("VACUUM");
 	// console.log("Database has been optimized and compacted.");
+	process.stdout.write("\x1b[s");
 
 	Object.values(endpoints).map((endpoint) => PageParser(endpoint)(1, endpoint.max));
 })();
