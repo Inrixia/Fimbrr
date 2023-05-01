@@ -1,5 +1,7 @@
 import { Downloader, SemaLimit } from "./Downloader.js";
-import { Story, Blog, User, db, Group } from "./Models.js";
+import { BlogBody } from "./Models/Blogs.js";
+import { StoryComments, BlogComments, UserComments, GroupComments } from "./Models/Comments.js";
+import { db } from "./Models/db.js";
 import { Stats } from "./Stats.js";
 
 type CommentsResponse =
@@ -14,36 +16,45 @@ type CommentsResponse =
 	| {
 			error: string;
 	  };
-
 type ValueOf<T> = T[keyof T];
-const endpoints = {
+const jsonEndpoints = {
 	story: {
 		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/story_comments?item_id=${id}&page=${page}&order=DESC`),
-		db: Story,
+		db: StoryComments,
+		limit: new SemaLimit(1024),
 		max: 530000,
 	},
 	user: {
 		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/comments_user_page?item_id=${id}&page=${page}&order=DESC`),
-		db: User,
+		db: UserComments,
+		limit: new SemaLimit(1024),
 		max: 1010000,
 	},
 	blog: {
 		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/blog_posts_comments?item_id=${id}&page=${page}&order=DESC`),
-		db: Blog,
+		db: BlogComments,
+		limit: new SemaLimit(1024),
 		max: 585000,
 	},
 	group: {
 		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/comments_group?item_id=${id}&page=${page}&order=DESC`),
-		db: Group,
+		db: GroupComments,
+		limit: new SemaLimit(1024),
 		max: 216971,
 	},
 } as const;
 
+const bodyEndpoints = {
+	blog: {
+		url: (id: number) => new URL(`https://www.fimfiction.net/blog/${id}`),
+		db: BlogBody,
+		limit: new SemaLimit(1024),
+		max: 1020000,
+	},
+};
+
 // Max number of downloads allowed to run at once
 const dwn = new Downloader(16);
-
-// Max number of jobs queued up
-const rL = new SemaLimit(10240);
 
 const transformResponse = (response: CommentsResponse) => {
 	if (response.error !== undefined) return response;
@@ -59,47 +70,74 @@ const transformResponse = (response: CommentsResponse) => {
 
 const getSuffix = () => `\nInflight: ${dwn.inflight}, Flighttime (avg): ${dwn.avgResponseTime.toFixed(2)}ms`;
 
-const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
-	const stats = new Stats(endpoint.db.name, endpoint.max);
-	const parsePage = async (id: number, maxId: number, page: number = 1) => {
+const BodyParser = (edp: ValueOf<typeof bodyEndpoints>) => {
+	const stats = new Stats(edp.db.name, edp.max);
+	const done = () => {
+		stats.set("donePages", 1);
+		stats.set("queue", -1);
+		Stats.log(getSuffix());
+	};
+	const parseBody = async (id: number, maxId: number) => {
 		stats.set("queue", 1);
-		if (page !== 1) stats.set("totalPages", 1);
-		else if (id < maxId) {
-			rL.aquire().then(() => parsePage(id + 1, maxId, 1).then(() => rL.release()));
+
+		if (id < maxId) edp.limit.execute(() => parseBody(id + 1, maxId));
+
+		const item = await edp.db.findOne({
+			where: {
+				id,
+			},
+		});
+		// Already grabbed
+		if (item !== null) return done();
+
+		try {
+			const bodyStr = await dwn.downloadBody(edp.url(id));
+			await edp.db.create({ id, bodyStr });
+		} catch (error: any) {
+			await edp.db.create({ id, error: error?.toString() });
 		}
-		const item = await endpoint.db.findOne({
+		done();
+	};
+	return parseBody;
+};
+
+const PageParser = (edp: ValueOf<typeof jsonEndpoints>) => {
+	const stats = new Stats(edp.db.name, edp.max);
+	const parsePage = async (id: number, maxId: number, page: number = 1) => {
+		const next = (maxPages?: number | null) => {
+			if (maxPages && maxPages > 1) {
+				if (page === 1) {
+					stats.set("totalPages", maxPages - 1);
+					for (let i = 2; i < maxPages; i++) parsePage(id, maxId, i);
+				}
+				if (page === maxPages) stats.set("doneIds", 1);
+			} else if (page === 1) stats.set("doneIds", 1);
+			stats.set("donePages", 1);
+			stats.set("queue", -1);
+			Stats.log(getSuffix());
+		};
+		stats.set("queue", 1);
+
+		if (page === 1 && id < maxId) edp.limit.execute(() => parsePage(id + 1, maxId));
+
+		const item = await edp.db.findOne({
 			where: {
 				id,
 				page,
 			},
 		});
 		// Already grabbed
-		if (item !== null) {
-			if (item.num_pages && item.num_pages > 1 && page < item.num_pages) parsePage(id, maxId, page + 1);
-			else {
-				stats.set("doneIds", 1);
-				Stats.log(getSuffix());
-			}
-			stats.set("donePages", 1);
-			stats.set("queue", -1);
-			return;
-		}
+		if (item !== null) return next(item.num_pages);
 
 		try {
-			const result = await dwn.download<CommentsResponse>(endpoint.url(id, page)).then(transformResponse);
-			await endpoint.db.create({ ...result, id, page });
+			const result = await dwn.download<CommentsResponse>(edp.url(id, page)).then(transformResponse);
+			await edp.db.create({ ...result, id, page });
 
-			let pages = result.error === undefined ? result.num_pages ?? page : page;
-			Stats.log(getSuffix());
-
-			if (page < pages) parsePage(id, maxId, page + 1);
-			else stats.set("doneIds", 1);
+			if (result.error === undefined) return next(result.num_pages);
 		} catch (error: any) {
-			await endpoint.db.create({ id, page, error: error?.toString() });
-			if (page === 1) stats.set("doneIds", 1);
+			await edp.db.create({ id, page, error: error?.toString() });
+			next();
 		}
-		stats.set("donePages", 1);
-		stats.set("queue", -1);
 	};
 	return parsePage;
 };
@@ -110,5 +148,6 @@ const PageParser = (endpoint: ValueOf<typeof endpoints>) => {
 	// console.log("Database has been optimized and compacted.");
 	process.stdout.write("\x1b[s");
 
-	Object.values(endpoints).map((endpoint) => PageParser(endpoint)(1, endpoint.max));
+	Object.values(jsonEndpoints).map((endpoint) => PageParser(endpoint)(1, endpoint.max));
+	Object.values(bodyEndpoints).map((endpoint) => BodyParser(endpoint)(1, endpoint.max));
 })();

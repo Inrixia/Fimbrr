@@ -9,12 +9,12 @@ type Info = {
 };
 
 export class Stats {
-	private static Totals: Stats = new Stats("Total", 0, true);
+	private static Totals: Stats = new Stats("Total", 0);
 	private static Stats: Stats[] = [];
 
 	public name: string;
 
-	constructor(name: string, max: number, noPush = false) {
+	constructor(name: string, max: number) {
 		this.name = name;
 
 		this.totalIds = max;
@@ -45,10 +45,11 @@ export class Stats {
 		);
 	}
 
-	private static infoLine = (stats: Stats) =>
-		`[${stats.name}]: Ids: ${stats.doneIds}/${stats.totalIds} (${stats.doneIdsAvg.toFixed(0)}/s), Pages: ${stats.donePages}/${stats.totalPages} (${stats.remainingPagesAvg.toFixed(0)}/s), Queue: ${
-			stats.queue
-		}                             `;
+	private static infoLine = (stats: Stats) => {
+		const ids = `Ids: ${stats.doneIds}/${stats.totalIds} (${stats.doneIdsAvg.toFixed(0)}/s), `;
+		const pages = `Pages: ${stats.donePages}/${stats.totalPages} (${stats.remainingPagesAvg.toFixed(0)}/s), `;
+		return `[${stats.name}]: ${stats.doneIds !== 0 ? ids : ""}${stats.donePages !== 0 ? pages : ""}Queue: ${stats.queue}                             `;
+	};
 
 	public doneIds = 0;
 	private doneIdsChange = new Change(30);

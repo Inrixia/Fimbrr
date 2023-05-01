@@ -1,13 +1,10 @@
-import { compress, decompress } from "@cloudpss/zstd/napi";
-import { Model, DataTypes, Optional, Sequelize } from "sequelize";
+import { Model, DataTypes, Optional } from "sequelize";
 
-export const db = new Sequelize({
-	dialect: "sqlite",
-	storage: `./FimComments.db`,
-	logging: false,
-});
+import { comp, decomp } from "./index.js";
+import { db } from "./db.js";
 
 // Define Attachment model attributes
+
 export interface CommentsAttributes {
 	id: number;
 	page: number;
@@ -19,10 +16,8 @@ export interface CommentsAttributes {
 	num_pages?: number | null;
 	error?: string | null;
 }
-
 type CommentsCreationAttributes = Optional<CommentsAttributes, "id">;
-
-class Comments extends Model<CommentsAttributes, CommentsCreationAttributes> {
+export class Comments extends Model<CommentsAttributes, CommentsCreationAttributes> {
 	declare id: number;
 	declare page: number;
 	declare contentStr?: string | null;
@@ -33,8 +28,7 @@ class Comments extends Model<CommentsAttributes, CommentsCreationAttributes> {
 	declare num_pages?: number | null;
 	declare error?: string | null;
 }
-
-const ComementsModel = {
+export const ComementsModel = {
 	id: {
 		type: DataTypes.INTEGER,
 		primaryKey: true,
@@ -69,19 +63,17 @@ const ComementsModel = {
 	},
 };
 
-export class Story extends Comments {}
-Story.init(
+export class StoryComments extends Comments {}
+StoryComments.init(
 	{
 		...ComementsModel,
 		contentStr: {
 			type: DataTypes.VIRTUAL,
 			get() {
-				return this.content ? decompress(this.content).toString() : this.content;
+				return decomp(this.content);
 			},
 			set(content: string | undefined | null) {
-				if (content === undefined || content === null || content === "") return;
-
-				this.setDataValue("content", compress(Buffer.from(content)));
+				this.setDataValue("content", comp(content));
 			},
 		},
 	},
@@ -91,19 +83,17 @@ Story.init(
 	}
 );
 
-export class Blog extends Comments {}
-Blog.init(
+export class BlogComments extends Comments {}
+BlogComments.init(
 	{
 		...ComementsModel,
 		contentStr: {
 			type: DataTypes.VIRTUAL,
 			get() {
-				return this.content ? decompress(this.content).toString() : this.content;
+				return decomp(this.content);
 			},
 			set(content: string | undefined | null) {
-				if (content === undefined || content === null || content === "") return;
-
-				this.setDataValue("content", compress(Buffer.from(content)));
+				this.setDataValue("content", comp(content));
 			},
 		},
 	},
@@ -113,19 +103,17 @@ Blog.init(
 	}
 );
 
-export class User extends Comments {}
-User.init(
+export class UserComments extends Comments {}
+UserComments.init(
 	{
 		...ComementsModel,
 		contentStr: {
 			type: DataTypes.VIRTUAL,
 			get() {
-				return this.content ? decompress(this.content).toString() : this.content;
+				return decomp(this.content);
 			},
 			set(content: string | undefined | null) {
-				if (content === undefined || content === null || content === "") return;
-
-				this.setDataValue("content", compress(Buffer.from(content)));
+				this.setDataValue("content", comp(content));
 			},
 		},
 	},
@@ -135,19 +123,17 @@ User.init(
 	}
 );
 
-export class Group extends Comments {}
-Group.init(
+export class GroupComments extends Comments {}
+GroupComments.init(
 	{
 		...ComementsModel,
 		contentStr: {
 			type: DataTypes.VIRTUAL,
 			get() {
-				return this.content ? decompress(this.content).toString() : this.content;
+				return decomp(this.content);
 			},
 			set(content: string | undefined | null) {
-				if (content === undefined || content === null || content === "") return;
-
-				this.setDataValue("content", compress(Buffer.from(content)));
+				this.setDataValue("content", comp(content));
 			},
 		},
 	},
