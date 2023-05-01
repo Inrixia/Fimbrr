@@ -77,10 +77,10 @@ const BodyParser = (edp: ValueOf<typeof bodyEndpoints>) => {
 		stats.set("queue", -1);
 		Stats.log(getSuffix());
 	};
-	const parseBody = async (id: number, maxId: number) => {
+	const parseBody = async (id: number) => {
 		stats.set("queue", 1);
 
-		if (id < maxId) edp.limit.execute(() => parseBody(id + 1, maxId));
+		if (id < edp.max) edp.limit.execute(() => parseBody(id + 1));
 
 		const item = await edp.db.findOne({
 			where: {
@@ -103,12 +103,12 @@ const BodyParser = (edp: ValueOf<typeof bodyEndpoints>) => {
 
 const PageParser = (edp: ValueOf<typeof jsonEndpoints>) => {
 	const stats = new Stats(edp.db.name, edp.max);
-	const parsePage = async (id: number, maxId: number, page: number = 1) => {
+	const parsePage = async (id: number, page: number = 1) => {
 		const next = (maxPages?: number | null) => {
 			if (maxPages && maxPages > 1) {
 				if (page === 1) {
 					stats.set("totalPages", maxPages - 1);
-					for (let i = 2; i < maxPages; i++) parsePage(id, maxId, i);
+					for (let nextPage = 2; nextPage <= maxPages; nextPage++) parsePage(id, nextPage);
 				}
 				if (page === maxPages) stats.set("doneIds", 1);
 			} else if (page === 1) stats.set("doneIds", 1);
@@ -118,7 +118,7 @@ const PageParser = (edp: ValueOf<typeof jsonEndpoints>) => {
 		};
 		stats.set("queue", 1);
 
-		if (page === 1 && id < maxId) edp.limit.execute(() => parsePage(id + 1, maxId));
+		if (page === 1 && id < edp.max) edp.limit.execute(() => parsePage(id + 1));
 
 		const item = await edp.db.findOne({
 			where: {
@@ -148,6 +148,6 @@ const PageParser = (edp: ValueOf<typeof jsonEndpoints>) => {
 	// console.log("Database has been optimized and compacted.");
 	process.stdout.write("\x1b[s");
 
-	Object.values(jsonEndpoints).map((endpoint) => PageParser(endpoint)(1, endpoint.max));
-	Object.values(bodyEndpoints).map((endpoint) => BodyParser(endpoint)(1, endpoint.max));
+	Object.values(jsonEndpoints).map((endpoint) => PageParser(endpoint)(1));
+	Object.values(bodyEndpoints).map((endpoint) => BodyParser(endpoint)(1));
 })();
