@@ -7,7 +7,7 @@ const blogMax: [string, RegExp] = ["https://www.fimfiction.net/search/blog-posts
 
 const parsers: Parser[] = [
 	new Parser(ParserType.Json, {
-		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/comments_group_thread?item_id=${id}page=${page}&order=DESC`),
+		url: (id: number, page: number) => new URL(`https://www.fimfiction.net/ajax/comments/comments_group_thread?item_id=${id}&page=${page}&order=DESC`),
 		db: GroupThreadComments,
 		maxId: 518000,
 	}),
