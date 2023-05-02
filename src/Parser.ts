@@ -85,7 +85,7 @@ export class Parser {
 	private GetParser = (recover: boolean = false) => {
 		let parser: (id: number, page?: number) => Promise<void>;
 		const nextId = (id: number) => {
-			this.stats.up("totalPages", 1);
+			// this.stats.up("totalPages", 1);
 			this.limit.execute(() => parser(id + 1));
 		};
 		const done = async (id: number, page?: number, numPages?: number | null) => {
@@ -145,7 +145,10 @@ export class Parser {
 			const db = this.db;
 			parser = async (id: number) => {
 				if (!this.isBodyType(this.db)) throw new Error("Attempted to use invalid parser type");
-				if (recover) this.stats.up("totalPages", 1);
+				if (recover) {
+					this.stats.up("totalPages", 1);
+					this.stats.up("totalIds", 1);
+				}
 				this.stats.up("queue", 1);
 
 				if (!recover && id < this.maxId) nextId(id);
@@ -288,7 +291,7 @@ export class Parser {
 		this.maxId = Math.max(max ?? 0, min + 100);
 
 		this.stats.up("totalIds", this.maxId);
-		this.stats.up("totalPages", 1);
+		this.stats.up("totalPages", this.maxId - this.minId + 1);
 
 		Parser.Log();
 		this.stats.up("doneIds", await this.getIdCount());
