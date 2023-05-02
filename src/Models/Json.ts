@@ -142,3 +142,25 @@ GroupComments.init(
 		modelName: "Group",
 	}
 );
+
+export class GroupThreadComments extends Comments {}
+GroupThreadComments.init(
+	{
+		...ComementsModel,
+		contentStr: {
+			type: DataTypes.VIRTUAL,
+			get() {
+				return decomp(this.content);
+			},
+			set(content: string | undefined | null) {
+				this.setDataValue("content", comp(content));
+			},
+		},
+	},
+	{
+		sequelize: db,
+		modelName: "GroupThread",
+	}
+);
+
+export type JsonModels = typeof GroupComments | typeof GroupThreadComments | typeof UserComments | typeof StoryComments | typeof BlogComments;

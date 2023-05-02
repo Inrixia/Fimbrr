@@ -72,6 +72,11 @@ export class Stats {
 	public queue = 0;
 
 	public set(key: keyof Info, change: number) {
+		this[key] = change;
+		Stats.Totals[key] = change;
+	}
+
+	public up(key: keyof Info, change: number) {
 		this[key] += change;
 		Stats.Totals[key] += change;
 

@@ -33,7 +33,9 @@ export const BlogBlodyModel = {
 	},
 };
 
-export class BlogBody extends BlogBodyModel {}
+export class BlogBody extends BlogBodyModel {
+	type = "Body";
+}
 BlogBody.init(
 	{
 		...BlogBlodyModel,
@@ -52,3 +54,5 @@ BlogBody.init(
 		modelName: "BlogBody",
 	}
 );
+
+export type BodyModels = typeof BlogBody;

@@ -46,6 +46,8 @@ export class Downloader {
 		this.semaLimit = new SemaLimit(downloadThreads);
 	}
 
+	public getStats = () => `\nInflight: ${this.inflight}, Flighttime (avg): ${this.avgResponseTime.toFixed(2)}ms   `;
+
 	public async download<T>(url: URL): Promise<T> {
 		await this.semaLimit.aquire();
 
