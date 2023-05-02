@@ -84,22 +84,27 @@ export class Parser {
 
 	private GetParser = (recover: boolean = false) => {
 		let parser: (id: number, page?: number) => Promise<void>;
+		const nextId = (id: number) => {
+			this.stats.up("totalPages", 1);
+			this.limit.execute(() => parser(id + 1));
+		};
 		const done = async (id: number, page?: number, numPages?: number | null) => {
 			this.stats.up("donePages", 1);
 			if (!numPages || page === numPages) this.stats.up("doneIds", 1);
 
 			this.stats.up("queue", -1);
 
-			// Lookahead
-			if (id === this.maxId && (page ?? 1) === 1) {
-				if (await this.setMinMax()) this.limit.execute(() => parser(id + 1));
-			}
+			// // Lookahead
+			// if (id === this.maxId && (page ?? 1) === 1) {
+			// 	if (await this.setMinMax()) nextId(id);
+			// }
 
 			Parser.Log();
 		};
 		if (this.isJsonType(this.db)) {
 			const db = this.db;
 			parser = async (id: number, page: number = 1) => {
+				if (recover) this.stats.up("totalPages", 1);
 				const next = async (numPages?: number | null) => {
 					if (!recover && numPages && numPages > 1 && page === 1) {
 						this.stats.up("totalPages", numPages - 1);
@@ -111,7 +116,7 @@ export class Parser {
 				};
 				this.stats.up("queue", 1);
 
-				if (!recover && page === 1 && id < this.maxId) this.limit.execute(() => parser(id + 1));
+				if (!recover && page === 1 && id < this.maxId) nextId(id);
 
 				if (id < this.minId) {
 					const item = await db.findOne({
@@ -140,9 +145,10 @@ export class Parser {
 			const db = this.db;
 			parser = async (id: number) => {
 				if (!this.isBodyType(this.db)) throw new Error("Attempted to use invalid parser type");
+				if (recover) this.stats.up("totalPages", 1);
 				this.stats.up("queue", 1);
 
-				if (!recover && id < this.maxId) this.limit.execute(() => parser(id + 1));
+				if (!recover && id < this.maxId) nextId(id);
 
 				if (id < this.minId) {
 					const item = await db.findOne({
@@ -279,19 +285,13 @@ export class Parser {
 		const [min, max] = await Promise.all([this.getStartId(), this.fetchMax()]);
 
 		this.minId = min;
-
-		this.maxId = Math.max(max ?? 0, min);
+		this.maxId = Math.max(max ?? 0, min + 100);
 
 		this.stats.up("totalIds", this.maxId);
-		this.stats.up("totalPages", this.maxId - this.minId + 1);
+		this.stats.up("totalPages", 1);
 
 		Parser.Log();
 		this.stats.up("doneIds", await this.getIdCount());
-
-		if (min !== 1) {
-			if (this.maxId >= (max ?? this.maxId)) return false;
-			if (this.minId >= (max ?? this.maxId)) return false;
-		}
 
 		return true;
 	}
