@@ -1,7 +1,10 @@
+import { writeFile } from "fs/promises";
 import { BlogBody } from "./Models/Body.js";
 import { GroupThreadComments, StoryComments, UserComments, BlogComments, GroupComments } from "./Models/Json.js";
 import { db } from "./Models/db.js";
 import { Parser, ParserType } from "./Parser.js";
+import { getLinks } from "./imgur.js";
+import { Op } from "sequelize";
 
 const blogMax: [string, RegExp] = ["https://www.fimfiction.net/search/blog-posts?q=", /href="\/blog\/(\d+)/g];
 
@@ -38,16 +41,48 @@ const parsers: Parser[] = [
 	}),
 ];
 
-(async () => {
+const fetch = async () => {
 	await db.sync();
 	// await db.query("VACUUM");
 	// console.log("Database has been optimized and compacted.");
 	process.stdout.write("\x1b[s");
 
 	for (const parser of parsers) parser.start();
-})();
 
-process.on("beforeExit", () => {
-	Parser.Log();
-	console.log();
-});
+	process.on("beforeExit", () => {
+		Parser.Log();
+		console.log();
+	});
+};
+const getImgur = async () => {
+	await db.sync();
+
+	const output = new Set<string>();
+
+	await Promise.all(
+		[GroupComments, StoryComments, UserComments, BlogComments, GroupThreadComments].map((tbl) =>
+			tbl
+				.findAll({
+					where: {
+						content: {
+							[Op.ne]: null,
+						},
+					},
+					limit: 1000,
+				})
+				.then((contents) => contents.forEach(({ contentStr }) => getLinks(contentStr, output)))
+		)
+	);
+	await BlogBody.findAll({
+		where: {
+			body: {
+				[Op.ne]: null,
+			},
+		},
+		limit: 1000,
+	}).then((contents) => contents.forEach(({ bodyStr }) => getLinks(bodyStr, output)));
+
+	await writeFile("imgurUrls.json", JSON.stringify(Array.from(output)));
+};
+// fetch();
+getImgur();
